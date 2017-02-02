@@ -1,0 +1,89 @@
+import java.io.*;
+
+public class ShellSort
+{
+	int[] array;
+	
+    public ShellSort()
+    {
+    	array = new int[100];
+    	for(int i=0;i < array.length;i++)
+    		array[i] = (int)(Math.random() * 100);
+    	
+    	printArray(array);
+    	long startTime = System.nanoTime();
+    	shellSort(1,0);
+    	long time = System.nanoTime() - startTime;
+    	
+    	printArray(array);
+		System.out.println("Execution Time: " + time + " ns");
+    	
+    	
+    }
+    
+    public void shellSort(int interval, int offset)
+    {
+    	if(interval*2 < array.length && offset == 0)
+    		shellSort(interval*2,0);
+    	if(offset < interval - 1 && interval + offset < array.length - 1)
+    		 shellSort(interval,offset+1);
+    	
+    	for(int i=offset;i + interval < array.length;i += interval)
+    	{
+    		if(array[i] > array[i+interval])
+    		{
+    			int hold = array[i+interval],n;
+    			for(n = i;n >= offset && array[n] > hold;n -= interval)
+    				array[n+interval] = array[n];
+    			array[n+interval] = hold;
+    		}
+    	}
+    	
+    	//System.out.print("i: " + interval + " o: " + offset + " list: ");
+    	//printArray(array);
+    }
+    
+    public void insertionSort(int[] list) //dank
+    {
+    	for(int i = 0;i < list.length - 1;i++)
+    		if(list[i] > list[i+1])
+    		{
+    			int hold = list[i+1],n;
+    			for(n = i;n >= 0 && list[n] > hold;n--)
+    				list[n+1] = list[n];
+    			list[n+1] = hold;
+    		}
+    		
+    }
+    
+    public void gnomeSort(int[] list)
+    {
+    	for(int i=0;i < list.length - 1;i++)
+    		for(int n=i;n >=0 && list[n] > list[n+1];n--)
+    		{
+    			list[n] += list[n+1];
+    			list[n+1] = list[n] - list[n+1];
+    			list[n] -= list[n+1];
+    		}
+    }
+    
+    public void printArray(int[] a)
+    {
+    	for(int i=0;i<a.length;i++)
+    		System.out.print(a[i] + " ");
+    	System.out.println();
+    }
+    
+    public void swap(int a,int b,int[] c)
+    {
+    	int hold = c[a];
+    	c[a] = c[b];
+    	c[b] = hold;
+    }
+    
+    public static void main(String[]args)
+    {
+    	new ShellSort();
+    }
+    
+}
