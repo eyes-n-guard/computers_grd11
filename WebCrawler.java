@@ -18,9 +18,9 @@ public class WebCrawler
     		crawl(branchLimit,new URL(URLString));
     		//System.out.println("pls work");
     	}
-    	catch(Exception e)
+    	catch(IOException e)
     	{
-    		System.out.println("error");
+    		//System.out.println("notanerror");
     	}
     }
     
@@ -48,8 +48,11 @@ public class WebCrawler
     		
     		try
     		{
+    			//System.out.println("asdfsdf");
     			in = url.openStream();
+    			//System.out.println("dsdfsdf");
     			dataIn = new DataInputStream(new BufferedInputStream(in));
+    			//System.out.println("asdfsdf");
     			
     			for(int i;(line = dataIn.readLine()) != null;)
     			{
@@ -58,6 +61,7 @@ public class WebCrawler
 	    				if((i = line.indexOf("href")) != -1)
 	    				{
 	    					i += 6;
+	    					//System.out.println("asdfsdf");
 	    					URL subURL = new URL(line.substring(i,line.indexOf(line.charAt(i-1),i)));
 	    					//System.out.println(subURL.toString());
 	    					boolean allow = true;
@@ -65,9 +69,9 @@ public class WebCrawler
 	    					{
 	    						int j;
 		    					String robotLine;
-		    					DataInputStream robot = new DataInputStream(new BufferedInputStream(new URL(subURL.toString() + "/robots.txt").openStream()));
+		    					DataInputStream robot = new DataInputStream(new BufferedInputStream(new URL(subURL.toString() + "robots.txt").openStream()));
 		    					while((robotLine = robot.readLine()) != null)
-		    						if((j = robotLine.indexOf("Disallow:")) != -1 && robotLine.substring(9).equals(" "))
+		    						if((j = robotLine.indexOf("Disallow:")) != -1 && robotLine.substring(10).length() > 4)
 		    							allow = false;
 	    					}
 	    					catch(Exception e){}
@@ -84,6 +88,9 @@ public class WebCrawler
     				{
     					//System.out.println("mue error");
     				}
+    				catch(Exception ex)
+    				{
+    				}
     				
     			}
     				
@@ -98,14 +105,14 @@ public class WebCrawler
     			{
     				in.close();
     			}
-    			catch(IOException ioe){}
+    			catch(Exception ioe){}
     		}
     	}
     }
     
     public static void main(String[]args)
     {
-    	WebCrawler crawler = new WebCrawler(100,5,"https://amirqualitymeats.com");
+    	WebCrawler crawler = new WebCrawler(100,15,"https://en.wikipedia.org/wiki/Main_Page");
     	//System.out.println("pls wor4k");
     	URL[] siteArray = crawler.getArray();
     	//System.out.println("pls work" + siteArray.length);
