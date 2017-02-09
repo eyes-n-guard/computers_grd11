@@ -18,7 +18,7 @@ public class WebCrawler
     		crawl(branchLimit,new URL(URLString));
     		//System.out.println("pls work");
     	}
-    	catch(IOException e)
+    	catch(Exception e)
     	{
     		//System.out.println("notanerror");
     	}
@@ -36,11 +36,11 @@ public class WebCrawler
     
     private void crawl(int n,URL url)
     {
-    	//System.out.println("n: " + n + " url: " + url.toString());
-    	
-    	
-    	if(n > 0 && websites.size() < sizeLimit)
+    	if(n > 0 && websites.size() <= sizeLimit)
     	{
+    		//System.out.println("n: " + n + " size:" + websites.size() + " url: " + url.toString());
+    		
+    		websites.add(url);
     		//System.out.println("pls workweewesdf");
     		InputStream in = null;
     		DataInputStream dataIn;
@@ -69,19 +69,17 @@ public class WebCrawler
 	    					{
 	    						int j;
 		    					String robotLine;
-		    					DataInputStream robot = new DataInputStream(new BufferedInputStream(new URL(subURL.toString() + "robots.txt").openStream()));
+		    					DataInputStream robot = new DataInputStream(new BufferedInputStream(new URL(subURL.toString() + "/robots.txt").openStream()));
 		    					while((robotLine = robot.readLine()) != null)
 		    						if((j = robotLine.indexOf("Disallow:")) != -1 && robotLine.substring(10).length() > 4)
 		    							allow = false;
 	    					}
 	    					catch(Exception e){}
 	    					
+	    					//System.out.println("" + allow);
 	    					
 	    					if(!websites.contains(subURL) && allow)
-	    					{
-	    						websites.add(subURL);
 	    						crawl(n-1,subURL);
-	    					}
 	    				}
     				}
     				catch(MalformedURLException mue)
@@ -112,10 +110,11 @@ public class WebCrawler
     
     public static void main(String[]args)
     {
-    	WebCrawler crawler = new WebCrawler(100,15,"https://en.wikipedia.org/wiki/Main_Page");
+    	WebCrawler crawler = new WebCrawler(100,15,"http://nicklievendag.com/simplify3d-vs-makerbot-desktop/");
     	//System.out.println("pls wor4k");
     	URL[] siteArray = crawler.getArray();
     	//System.out.println("pls work" + siteArray.length);
+    	System.out.println("\n\n\n");
     	for(int i=0;i < siteArray.length;i++)
     		System.out.println(i + " " + siteArray[i].toString());
     }
