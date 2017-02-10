@@ -14,14 +14,9 @@ public class WebCrawler
     	websites = new LinkedList();
     	try
     	{
-    		//System.out.println("pls work");
     		crawl(branchLimit,new URL(URLString));
-    		//System.out.println("pls work");
     	}
-    	catch(Exception e)
-    	{
-    		//System.out.println("notanerror");
-    	}
+    	catch(Exception e){}
     }
     
     public LinkedList getList()
@@ -36,67 +31,52 @@ public class WebCrawler
     
     private void crawl(int n,URL url)
     {
-    	if(n > 0 && websites.size() <= sizeLimit)
+    	boolean allow = true;
+		try
+		{
+			int j;
+			String robotLine;
+			DataInputStream robot = new DataInputStream(new BufferedInputStream(new URL(url.toString() + "/robots.txt").openStream()));
+			
+			while((robotLine = robot.readLine()) != null && allow)
+				if((j = robotLine.indexOf("Disallow:")) != -1 && robotLine.substring(10).length() > 4)
+					allow = false;
+		}
+		catch(Exception e){}
+    	
+    	if(n > 0 && websites.size() < sizeLimit && allow)
     	{
     		//System.out.println("n: " + n + " size:" + websites.size() + " url: " + url.toString());
     		
     		websites.add(url);
-    		//System.out.println("pls workweewesdf");
     		InputStream in = null;
     		DataInputStream dataIn;
     		String line;
     		
     		try
     		{
-    			//System.out.println("asdfsdf");
     			in = url.openStream();
-    			//System.out.println("dsdfsdf");
     			dataIn = new DataInputStream(new BufferedInputStream(in));
-    			//System.out.println("asdfsdf");
-    			
-    			for(int i;(line = dataIn.readLine()) != null;)
+    			int i;
+    			while((line = dataIn.readLine()) != null && websites.size() < sizeLimit) //stop reading website once limit reached
     			{
     				try
     				{
 	    				if((i = line.indexOf("href")) != -1)
 	    				{
 	    					i += 6;
-	    					//System.out.println("asdfsdf");
 	    					URL subURL = new URL(line.substring(i,line.indexOf(line.charAt(i-1),i)));
-	    					//System.out.println(subURL.toString());
-	    					boolean allow = true;
-	    					try
-	    					{
-	    						int j;
-		    					String robotLine;
-		    					DataInputStream robot = new DataInputStream(new BufferedInputStream(new URL(subURL.toString() + "/robots.txt").openStream()));
-		    					while((robotLine = robot.readLine()) != null)
-		    						if((j = robotLine.indexOf("Disallow:")) != -1 && robotLine.substring(10).length() > 4)
-		    							allow = false;
-	    					}
-	    					catch(Exception e){}
 	    					
-	    					//System.out.println("" + allow);
-	    					
-	    					if(!websites.contains(subURL) && allow)
+	    					if(!websites.contains(subURL))
 	    						crawl(n-1,subURL);
 	    				}
     				}
-    				catch(MalformedURLException mue)
-    				{
-    					//System.out.println("mue error");
-    				}
-    				catch(Exception ex)
-    				{
-    				}
+    				catch(Exception ex){}
     				
     			}
     				
     		}
-    		catch(IOException ioe)
-    		{
-    			//ioe.printStackTrace();
-    		}
+    		catch(Exception e){}
     		finally
     		{
     			try
@@ -110,11 +90,9 @@ public class WebCrawler
     
     public static void main(String[]args)
     {
-    	WebCrawler crawler = new WebCrawler(100,15,"http://nicklievendag.com/simplify3d-vs-makerbot-desktop/");
-    	//System.out.println("pls wor4k");
+    	WebCrawler crawler = new WebCrawler(30,5,"https://en.wikipedia.org/wiki/Main_Page");
     	URL[] siteArray = crawler.getArray();
-    	//System.out.println("pls work" + siteArray.length);
-    	System.out.println("\n\n\n");
+    	//System.out.println("\n\n\n");
     	for(int i=0;i < siteArray.length;i++)
     		System.out.println(i + " " + siteArray[i].toString());
     }
