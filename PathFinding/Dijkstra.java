@@ -57,6 +57,7 @@ public class Dijkstra //currently broken pls fix me
     		nodeList.addFirst(current);
     		current = current.getPrev();
     	}
+    	nodeList.addFirst(head);
     	return nodeList.toArray(new Node[0]);
     }
     
