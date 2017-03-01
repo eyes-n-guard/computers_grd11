@@ -5,32 +5,44 @@ public class Node
 	private int distance;
 	private Node prev;
 	private LinkedList<Node> next;
+	private LinkedList<Integer> nextDist;
 	
     public Node()
     {
-    	distance = -1;
+    	distance = 0;
     	prev = null;
     	next = new <Node>LinkedList();
+    	nextDist = new <Integer>LinkedList();
     }
     
-    public Node(int d)
+    public LinkedList getNextList()
     {
-    	distance = d;
-    	prev = null;
-    	next = new <Node>LinkedList();
+    	return next;
+    }
+    
+    public LinkedList getNextDistList()
+    {
+    	return nextDist;
     }
     
     public void clearNext()
     {
     	next = new <Node>LinkedList();
+    	nextDist = new <Integer>LinkedList();
     }
     
-    public void addNext(Node n)
+    public void addNext(Node n, int d)
     {
     	next.add(n);
+    	nextDist.add(new Integer(d));
     }
     
-    public Node[] getNext()
+    public Integer[] getNextDistArray()
+    {
+    	return nextDist.toArray(new Integer[0]);
+    }
+    
+    public Node[] getNextArray()
     {
     	return next.toArray(new Node[0]);
     }
