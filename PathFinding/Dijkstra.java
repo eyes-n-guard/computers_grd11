@@ -13,18 +13,29 @@ public class Dijkstra
     	Node d = new Node();
     	Node e = new Node();
     	Node f = new Node();
+    	Node g = new Node();
     	Node end = new Node();
     	
-    	start.addNext(a,3);
-    	start.addNext(b,2);
-    	start.addNext(d,4);
-    	a.addNext(e,2);
-    	b.addNext(c,2);
-    	b.addNext(f,8);
-    	d.addNext(f,5);
-    	d.addNext(b,1);
+    	start.addNext(a,8);
+    	start.addNext(b,4);
+    	start.addNext(c,3);
+    	a.addNext(d,6);
+    	a.addNext(start,8);
+    	b.addNext(g,2);
+    	b.addNext(start,4);
+    	c.addNext(g,7);
+    	c.addNext(start,3);
+    	d.addNext(e,3);
+    	d.addNext(a,6);
+    	e.addNext(f,7);
     	e.addNext(end,1);
-    	f.addNext(end,3);
+    	e.addNext(d,3);
+    	f.addNext(end,10);
+    	f.addNext(e,7);
+    	f.addNext(g,4);
+    	g.addNext(f,4);
+    	g.addNext(c,7);
+    	g.addNext(b,2);
     	
     	findPath(start, end);
     	Node[] path = listPath(start, end);
@@ -44,8 +55,12 @@ public class Dijkstra
     			System.out.println("e");
     		else if(path[i] == f)
     			System.out.println("f");
+    		else if(path[i] == g)
+    			System.out.println("g");
     		else if(path[i] == end)
     			System.out.println("end");
+    			
+    	System.out.println(end.getDist() + "");
     }
     
     public Node[] listPath(Node head, Node end)
@@ -66,13 +81,11 @@ public class Dijkstra
     	LinkedList<Node> unvisited = new <Node>LinkedList();
     	listNodes(unvisited, head);
     	
-    	Node shortest = null;
+    	Node shortest = head;
     	while(shortest != end)
     	{
     		//find shortest
-    		if(unvisited.contains(head))
-    			shortest = head;
-    		else
+    		if(!unvisited.contains(head))
     		{
 				Node[] nodeArray = unvisited.toArray(new Node[0]);
 	    		int sDist = nodeArray[0].getDist();
@@ -91,7 +104,7 @@ public class Dijkstra
     			Integer[] nextDist = shortest.getNextDistArray();
     			for(int i=0;i < nextList.length;i++)
     			{
-    				if(nextList[i].getDist() == 0 || shortest.getDist() + nextDist[i].intValue() < nextList[i].getDist())
+    				if((nextList[i].getDist() == 0 || shortest.getDist() + nextDist[i].intValue() < nextList[i].getDist()) && unvisited.contains(nextList[i]))
     				{
     					nextList[i].setDist(shortest.getDist() + nextDist[i].intValue());
     					nextList[i].setPrev(shortest);
