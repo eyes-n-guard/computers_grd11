@@ -14,31 +14,44 @@ public class Dijkstra
     	Node e = new Node();
     	Node f = new Node();
     	Node g = new Node();
-    	Node end = new Node();
+    	Node h = new Node();
     	
-    	start.addNext(a,8);
-    	start.addNext(b,4);
-    	start.addNext(c,3);
-    	a.addNext(d,6);
-    	a.addNext(start,8);
-    	b.addNext(g,2);
-    	b.addNext(start,4);
-    	c.addNext(g,7);
-    	c.addNext(start,3);
-    	d.addNext(e,3);
-    	d.addNext(a,6);
-    	e.addNext(f,7);
-    	e.addNext(end,1);
-    	e.addNext(d,3);
-    	f.addNext(end,10);
-    	f.addNext(e,7);
-    	f.addNext(g,4);
-    	g.addNext(f,4);
-    	g.addNext(c,7);
-    	g.addNext(b,2);
+    	start.addPath(a,4);
+    	start.addPath(g,8);
+    	a.addPath(b,8);
+    	a.addPath(g,11);
+    	g.addPath(h,7);
+    	g.addPath(f,1);
+    	b.addPath(h,2);
+    	h.addPath(f,6);
+    	b.addPath(c,7);
+    	f.addPath(e,2);
+    	c.addPath(d,9);
+    	e.addPath(d,10);
     	
-    	findPath(start, end);
-    	Node[] path = listPath(start, end);
+//    	start.addNext(a,8);
+//    	start.addNext(b,4);
+//    	start.addNext(c,3);
+//    	a.addNext(d,6);
+//    	a.addNext(start,8);
+//    	b.addNext(g,2);
+//    	b.addNext(start,4);
+//    	c.addNext(g,7);
+//    	c.addNext(start,3);
+//    	d.addNext(e,3);
+//    	d.addNext(a,6);
+//    	e.addNext(f,7);
+//    	e.addNext(end,1);
+//    	e.addNext(d,3);
+//    	f.addNext(end,10);
+//    	f.addNext(e,7);
+//    	f.addNext(g,4);
+//    	g.addNext(f,4);
+//    	g.addNext(c,7);
+//    	g.addNext(b,2);
+    	
+    	findPath(c, g);
+    	Node[] path = listPath(c, g);
     	
     	for(int i=0;i < path.length;i++)
     		if(path[i] == start)
@@ -57,10 +70,10 @@ public class Dijkstra
     			System.out.println("f");
     		else if(path[i] == g)
     			System.out.println("g");
-    		else if(path[i] == end)
-    			System.out.println("end");
+    		else if(path[i] == h)
+    			System.out.println("h");
     			
-    	System.out.println(end.getDist() + "");
+    	System.out.println(g.getDist() + "");
     }
     
     public Node[] listPath(Node head, Node end)

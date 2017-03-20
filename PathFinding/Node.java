@@ -31,6 +31,12 @@ public class Node
     	nextDist = new <Integer>LinkedList();
     }
     
+    public void addPath(Node n, int d)
+    {
+    	addNext(n,d);
+    	n.addNext(this,d);
+    }
+    
     public void addNext(Node n, int d)
     {
     	next.add(n);
