@@ -41,6 +41,12 @@ task display()
 		else if(nLCDButtons == 0)
 			set = true;
 
+		if(SensorValue(button1))
+			SensorValue(crank1) = 0;
+
+		if(SensorValue(button2))
+			SensorValue(crank2) = 0;
+
 		sprintf(out, "RPM: %d", rpm);
 		clearLCDLine(0);
 		displayLCDString(0,0,out);
@@ -48,6 +54,7 @@ task display()
 		sprintf(out, "offset: %d", offset);
 		clearLCDLine(1);
 		displayLCDString(1,0,out);
+
 		sleep(50);
 	}
 }
