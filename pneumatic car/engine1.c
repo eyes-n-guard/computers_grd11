@@ -30,24 +30,26 @@ task display()
 {
 	bool set = true;
 	string out = "";
+	bLCDBacklight = true;
 
 	while(true)
 	{
 		if(set)
 		{
-			offset += (nLCDButtons == 4) - (nLCDButtons == 1);
+			offset += ((nLCDButtons == 4) - (nLCDButtons == 1))*5;
 			set = false;
 		}
 		else if(nLCDButtons == 0)
 			set = true;
 
-		if(SensorValue(button1))
+		if(nLCDButtons == 2)
 			SensorValue(crank1) = 0;
 
 		if(SensorValue(button2))
 			SensorValue(crank2) = 0;
 
-		sprintf(out, "RPM: %d", rpm);
+		//sprintf(out, "RPM: %d", rpm);
+		sprintf(out, "%d %d %d %d %d %d",SensorValue(p1),SensorValue(p2),SensorValue(p3),SensorValue(p4),SensorValue(crank1),SensorValue(crank2));
 		clearLCDLine(0);
 		displayLCDString(0,0,out);
 
@@ -61,14 +63,11 @@ task display()
 
 task main()
 {
-	startTask(display, 5);
-	startTask(speed, 6);
+	startTask(display);
+	//startTask(speed);
 	while(true)
 	{
-		SensorValue(p2) = ((SensorValue(crank1) + offset) / 180) & 1;
-		SensorValue(p1) = !SensorValue(p2);
-
-		SensorValue(p4) = ((SensorValue(crank2) + offset) / 180) & 1;
-		SensorValue(p3) = !SensorValue(p4);
+		SensorValue(p1) = SensorValue(p2) = (((SensorValue(crank1) + offset) / 180) & 1);
+		SensorValue(p3) = SensorValue(p4) = ((SensorValue(crank2) + offset) / 180) & 1;
 	}
 }
