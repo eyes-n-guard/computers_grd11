@@ -67,6 +67,7 @@ task main()
 	//startTask(speed);
 	while(true)
 	{
+		if(SensorValue(crank
 		SensorValue(p1) = SensorValue(p2) = (((SensorValue(crank1) + offset) / 180) & 1);
 		SensorValue(p3) = SensorValue(p4) = ((SensorValue(crank2) + offset) / 180) & 1;
 	}

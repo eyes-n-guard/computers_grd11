@@ -1,5 +1,5 @@
 #define LEDPORT PORTD
-#define LEDBIT_1 2
+#define LEDBIT_1 0
 #define LEDBIT_2 3
 #define LEDBIT_3 4
 #define LEDBIT_4 5
@@ -15,6 +15,7 @@ void setup()
     "sbi %[portdir], %[lbit4] \n"
     
     "clr r19 \n"
+    "out %[port], r19 \n"
     
     "0:"
       "clr r16 \n"
