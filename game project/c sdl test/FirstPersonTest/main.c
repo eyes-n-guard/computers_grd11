@@ -4,15 +4,17 @@
 #include <SDL.h>
 #include <math.h>
 
-#define WIDTH 800
-#define HEIGHT 600
-#define HFOV (WIDTH * 0.7f)
-#define VFOV (HEIGHT * 0.7f)
+#define WIDTH 1200
+#define HEIGHT 900
+#define SENSITIVITY 2
+
+const float FRUSTUM_WIDTH = 1;
 
 int sign(float a);
 float min(float a, float b);
 float max(float a, float b);
 float clamp(float a, float bot, float top);
+
 
 
 typedef struct //vec3
@@ -23,8 +25,14 @@ typedef struct //vec3
 typedef struct //camera
 {
     vec3 pos, vel;
-    float angle, yaw, speed, accel, decel; //angle and yaw in radians (angle is pitch of the camera)
+    float pitch, yaw, speed, accel, decel; //angle and yaw in radians
 } camera;
+
+typedef struct //face //each face is a triangle, with 3 indexes in the vertex array
+{
+    int p1, p2, p3, texture, type; //type: 0: normal face, 1: areaportal
+    vec3 norm;
+} face;
 
 float length(vec3 a);
 float dot(vec3 a, vec3 b);
@@ -36,11 +44,15 @@ vec3 unit(vec3 a);
 vec3 cross(vec3 a, vec3 b);
 vec3 rotate(vec3 a, vec3 b, float theta);
 vec3 rotateZ(vec3 a, float theta);
+vec3 rotateX(vec3 a, float theta);
 vec3 dropX(vec3 a);
 vec3 dropY(vec3 a);
 vec3 dropZ(vec3 a);
 
 void intersection(float x1, float y1, float x2, float y2, float x3, float y3, float x4, float y4, float *xOut, float *yOut);
+
+void drawLine(vec3 p1, vec3 p2, SDL_Renderer *render);
+void drawWireframeFace(face f, camera player, vec3 *points, SDL_Renderer *render);
 
 int main(int argc, char **argv)
 {
@@ -52,14 +64,17 @@ int main(int argc, char **argv)
 
     window = SDL_CreateWindow("Dank meme", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, SDL_WINDOW_SHOWN);
     renderer = SDL_CreateRenderer(window,-1,SDL_RENDERER_ACCELERATED);
-    //SDL_CreateWindowAndRenderer(WIDTH, HEIGHT, 0, &window, &renderer);
 
-    camera player = {.pos = {.x = 0, .y = -500, .z = 0}, .vel = {.x = 0, .y = 0, .z = 0}, .angle = 0, .yaw = 0, .speed = 10, .accel = 1, .decel = 1.2};
+    SDL_CaptureMouse(true);
+    SDL_SetRelativeMouseMode(true);
 
-    vec3 topLeft = {-400,200,-400};
-    vec3 topRight = {400,200,-400};
-    vec3 botLeft = {-400,200,400};
-    vec3 botRight = {400,200,400};
+
+    camera player = {.pos = {.x = 0, .y = -800, .z = 0}, .vel = {.x = 0, .y = 0, .z = 0}, .pitch = 0, .yaw = 0, .speed = 15, .accel = 1.2, .decel = 1.2};
+
+    vec3 topLeft = {-600,1500,-400};
+    vec3 topRight = {600,1500,-400};
+    vec3 botLeft = {-600,500,400};
+    vec3 botRight = {600,500,400};
 
     bool quit = false;
     SDL_Event e;
@@ -151,14 +166,19 @@ int main(int argc, char **argv)
                     break;
                 }
             }
+            else if(e.type == SDL_MOUSEMOTION)
+            {
+                player.yaw -= e.motion.xrel*0.0004*SENSITIVITY;
+                player.pitch = clamp(player.pitch + e.motion.yrel*0.0004*SENSITIVITY, -M_PI/2, M_PI/2);
+            }
         }
 
         //player movement & linear interpolation
-        vec3 dv = {.x = (((wasd & 2) >> 1) - ((wasd & 8) >> 3)), .y = ((wasd & 1) - ((wasd & 4) >> 2)), .z = 0};
+        vec3 dv = {.x = (((wasd & 8) >> 3) - ((wasd & 2) >> 1)), .y = ((wasd & 1) - ((wasd & 4) >> 2)), .z = 0};
         dv = mul(unit(dv),player.accel);
 
-        player.yaw += (((arrows & 8) >> 3) - ((arrows & 2) >> 1)) * 0.025;
-        player.pos.z += (((arrows & 4) >> 2) - (arrows & 1)) * 5;
+        //player.yaw -= (((arrows & 8) >> 3) - ((arrows & 2) >> 1)) * 0.02;
+        //player.pitch = clamp(player.pitch + (((arrows & 4) >> 2) - (arrows & 1)) * 0.02,-M_PI/2, M_PI/2);
 
         float zHold = player.vel.z; //zero z value of velocity vector so movement is only applied to x and y axes
         player.vel.z = 0;
@@ -188,6 +208,8 @@ int main(int argc, char **argv)
         player.vel.z = zHold;
 
         player.pos = add(player.pos, player.vel); //move player based on velocity
+
+
 
         //printf("x: %0.2f y: %0.2f z: %0.2f  speed: %0.2f\n", player.pos.x, player.pos.y, player.pos.z, length(player.vel));
 
@@ -226,102 +248,21 @@ int main(int argc, char **argv)
         SDL_RenderDrawLine(renderer,botLeftR.x + 400, botLeftR.y + 300, botRightR.x + 400, botRightR.y + 300); //skipping vertical lines because they wont be seen
         */
 
-        //stationary player, moveable world, 3d projection //dont draw player
 
 
-        vec3 topLeftR = rotateZ(sub(topLeft,player.pos), -player.yaw);
-        vec3 topRightR = rotateZ(sub(topRight,player.pos), -player.yaw);
-        vec3 botLeftR = rotateZ(sub(botLeft,player.pos), -player.yaw);
-        vec3 botRightR = rotateZ(sub(botRight,player.pos), -player.yaw);
+        //transform world so player is at pos (0,0,0), and rotate world according to players angles
+        vec3 topLeftR = rotateX(rotateZ(sub(topLeft,player.pos), -player.yaw),-player.pitch);
+        vec3 topRightR = rotateX(rotateZ(sub(topRight,player.pos), -player.yaw),-player.pitch);
+        vec3 botLeftR = rotateX(rotateZ(sub(botLeft,player.pos), -player.yaw),-player.pitch);
+        vec3 botRightR = rotateX(rotateZ(sub(botRight,player.pos), -player.yaw),-player.pitch);
 
-
-        //printf("%0.2f %0.2f %0.2f    ", topLeftR.x, topLeftR.y, topLeftR.z);
-
-        /*
-        if(topLeftR.y <= 0) //if point is behind player, find the intersection between the line and the x-axis
-        {
-            vec3 dir = unit(sub(topRightR, topLeftR));
-            topLeftR = add(topLeftR,mul(dir,-topLeftR.y / dir.y));
-            botLeftR = add(botLeftR,mul(dir,-botLeftR.y / dir.y));
-            topLeftR.y += 0.001;
-            botLeftR.y += 0.001;
-        }
-
-        if(topRightR.y <= 0)
-        {
-            vec3 dir = unit(sub(topLeftR, topRightR));
-            topRightR = add(topRightR,mul(dir,-topRightR.y / dir.y));
-            botRightR = add(botRightR,mul(dir,-botRightR.y / dir.y));
-            topRightR.y += 0.001;
-            botRightR.y += 0.001;
-        }
-        */
-        if(topLeftR.y > 0 || topRightR.y > 0)
-        {
-            if(topLeftR.y <= 0 || topRightR.y <= 0)
-            {
-                float ix1, iy1, ix2, iy2; //find both intersection points (top down view)
-                intersection(-0.0001,0.0001,-M_SQRT1_2,M_SQRT1_2,topLeftR.x,topLeftR.y,topRightR.x, topRightR.y, &ix1, &iy1); //left and forwards
-                intersection(0.0001,0.0001,M_SQRT1_2,M_SQRT1_2,topLeftR.x,topLeftR.y,topRightR.x, topRightR.y, &ix2, &iy2); //right and forwards
-
-
-
-                //printf("%0.2f %0.2f %0.2f   ", topLeftR.x, topLeftR.y, topLeftR.z);
-                if(topLeftR.y < 0.0001)
-                {
-                    if(iy1 > 0)
-                    {
-                        topLeftR.x = ix1;
-                        topLeftR.y = iy1;
-                    }
-                    else
-                    {
-                        topLeftR.x = ix2;
-                        topLeftR.y = iy2;
-                    }
-                }
-
-                if(topRightR.y < 0.0001)
-                {
-                    if(iy2 > 0)
-                    {
-                        topRightR.x = ix2;
-                        topRightR.y = iy2;
-                    }
-                    else
-                    {
-                        topRightR.x = ix1;
-                        topRightR.y = iy1;
-                    }
-                }
-
-                botLeftR.x = topLeftR.x;
-                botLeftR.y = topLeftR.y;
-
-                botRightR.x = topRightR.x;
-                botRightR.y = topRightR.y;
-                //printf("%0.2f %0.2f %0.2f\n", topLeftR.x, topLeftR.y, topLeftR.z);
-            }
-
-            topLeftR.z *= VFOV / topLeftR.y;
-            topRightR.z *= VFOV / topRightR.y;
-            botLeftR.z *= VFOV / botLeftR.y;
-            botRightR.z *= VFOV / botRightR.y;
-
-            topLeftR.x *= -HFOV  / topLeftR.y;
-            topRightR.x *= -HFOV / topRightR.y;
-            botLeftR.x *= -HFOV / botLeftR.y;
-            botRightR.x *= -HFOV / botRightR.y;
-
-            //printf("%0.2f %0.2f %0.2f\n", topLeftR.x, topLeftR.y, topLeftR.z);
-            SDL_SetRenderDrawColor(renderer, 200,0,200,SDL_ALPHA_OPAQUE);
-            SDL_RenderDrawLine(renderer,topLeftR.x + 400, topLeftR.z + 300, topRightR.x + 400, topRightR.z + 300); //shift everything right 400 and down 300
-            SDL_RenderDrawLine(renderer,botLeftR.x + 400, botLeftR.z + 300, botRightR.x + 400, botRightR.z + 300);
-            SDL_RenderDrawLine(renderer,topLeftR.x + 400, topLeftR.z + 300, botLeftR.x + 400, botLeftR.z + 300);
-            SDL_RenderDrawLine(renderer,topRightR.x + 400, topRightR.z + 300, botRightR.x + 400, botRightR.z + 300);
-        }
-
-
+        SDL_SetRenderDrawColor(renderer, 0,200,200, SDL_ALPHA_OPAQUE);
+        drawLine(botRightR, botLeftR, renderer);
+        drawLine(topLeftR, topRightR, renderer);
+        drawLine(botLeftR, topLeftR, renderer);
+        drawLine(botRightR, topRightR, renderer);
+        drawLine(botLeftR, topRightR, renderer);
+        drawLine(topLeftR, botRightR, renderer);
 
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
@@ -336,6 +277,106 @@ int main(int argc, char **argv)
     SDL_Quit();
 
     return 0;
+}
+
+void drawWireframeFace(face f, camera player, vec3 *points, SDL_Renderer *render)
+{
+    if(rotateX(rotateZ(f.norm, -player.yaw), -player.pitch).y <= 0) //only draw if the face is facing towards the player
+    {
+        vec3 p1R = rotateX(rotateZ(points[f.p1], -player.yaw), -player.pitch); //rotate points relative to player
+        vec3 p2R = rotateX(rotateZ(points[f.p2], -player.yaw), -player.pitch);
+        vec3 p3R = rotateX(rotateZ(points[f.p3], -player.yaw), -player.pitch);
+
+        drawLine(p1R,p2R,render);
+        drawLine(p2R,p3R,render);
+        drawLine(p3R,p1R,render);
+    }
+}
+
+void drawLine(vec3 p1, vec3 p2, SDL_Renderer *render)
+{
+    vec3 start = {p1.x, p1.y, p1.z};
+    vec3 end = {p2.x, p2.y, p2.z};
+    vec3 disp = sub(end, start);
+
+    if(start.y >= 0 || end.y >= 0)
+    {
+        vec3 left = {-FRUSTUM_WIDTH, 1, 0}; //normals of the planes which make up the view frustum (point inwards)
+        left = unit(left);
+        vec3 right = {FRUSTUM_WIDTH, 1, 0};
+        right = unit(right);
+        vec3 up = {0, 1, FRUSTUM_WIDTH};
+        up = unit(up);
+        vec3 down = {0, 1, -FRUSTUM_WIDTH};
+        down = unit(down);
+        vec3 forward = {0,1,0};
+
+
+        if(start.y < 0)
+        {
+            start = add(start, mul(disp, dot(mul(start, -1), forward)/dot(disp,forward)));
+            //start.y += 0.01;
+        }
+
+        if(end.y < 0)
+        {
+            end = add(start, mul(disp, dot(mul(start, -1), forward)/dot(disp,forward)));
+            //end.y += 0.01;
+        }
+
+        int code1 = 0, code2 = 0;
+        if(dot(start, up) < 0)
+            code1 |= 1;
+        if(dot(start, down) < 0)
+            code1 |= 2;
+        if(dot(start, right) < 0)
+            code1 |= 4;
+        if(dot(start, left) < 0)
+            code1 |= 8;
+
+        if(dot(end, up) < 0)
+            code2 |= 1;
+        if(dot(end, down) < 0)
+            code2 |= 2;
+        if(dot(end, right) < 0)
+            code2 |= 4;
+        if(dot(end, left) < 0)
+            code2 |= 8;
+
+        if((code1 & code2) == 0)
+        {
+            if((code1 & 1) == 1) //start should be clipped to top plane
+                start = add(start, mul(disp, dot(mul(start,-1),up)/dot(disp,up)));
+            if((code1 & 2) == 2) //start should be clipped to bottom plane
+                start = add(start, mul(disp, dot(mul(start,-1),down)/dot(disp,down)));
+            if((code1 & 4) == 4) //start should be clipped to right plane
+                start = add(start, mul(disp, dot(mul(start,-1),right)/dot(disp,right)));
+            if((code1 & 8) == 8) //start should be clipped to left plane
+                start = add(start, mul(disp, dot(mul(start,-1),left)/dot(disp,left)));
+
+
+            if((code2 & 1) == 1) //end should be clipped to top plane
+                end = add(start, mul(disp, dot(mul(start,-1),up)/dot(disp,up)));
+            if((code2 & 2) == 2) //end should be clipped to bottom plane
+                end = add(start, mul(disp, dot(mul(start,-1),down)/dot(disp,down)));
+            if((code2 & 4) == 4) //end should be clipped to right plane
+                end = add(start, mul(disp, dot(mul(start,-1),right)/dot(disp,right)));
+            if((code2 & 8) == 8) //end should be clipped to left plane
+                end = add(start, mul(disp, dot(mul(start,-1),left)/dot(disp,left)));
+            printf("\n");
+
+            //3d projection transformation
+            start.z *= (HEIGHT/2) / start.y;
+            start.x *= (WIDTH/2)  / start.y;
+
+            end.z *= (HEIGHT/2) / end.y;
+            end.x *= (WIDTH/2)  / end.y;
+
+            //printf("%f %f   %f %f", start.x, start.z, end.x, end.z);
+            SDL_RenderDrawLine(render,start.x + WIDTH/2, start.z + HEIGHT/2, end.x + WIDTH/2, end.z + HEIGHT/2);
+        }
+    }
+
 }
 
 int sign(float a)
@@ -403,7 +444,7 @@ vec3 cross(vec3 a, vec3 b)
     return r;
 }
 
-vec3 rotate(vec3 a, vec3 b, float theta) //rotates vector a theta radians around axis b
+vec3 rotate(vec3 a, vec3 b, float theta) //rotates vector a theta radians around axis b //TODO: implement the more efficient way of doing this
 {
     vec3 parallel = mul(unit(a),dot(a,unit(b)));
     vec3 perpendicular = sub(a,parallel);
@@ -417,6 +458,15 @@ vec3 rotateZ(vec3 a, float theta) //faster version of rotate with z as the axis
     float cosTheta = cos(theta);
 
     vec3 r = {.x = a.x * cosTheta - a.y * sinTheta, .y = a.y * cosTheta + a.x * sinTheta, .z = a.z};
+    return r;
+}
+
+vec3 rotateX(vec3 a, float theta)
+{
+    float sinTheta = sin(theta);
+    float cosTheta = cos(theta);
+
+    vec3 r = {.x = a.x, .y = a.y * cosTheta - a.z * sinTheta, .z = a.z * cosTheta + a.y * sinTheta};
     return r;
 }
 
