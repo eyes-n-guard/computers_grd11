@@ -8,9 +8,9 @@
 #define HEIGHT 900
 #define SENSITIVITY 2
 
-#define MAP_FILE "complexRoom.txt"
+#define MAP_FILE "cube.txt"
 
-#define BACKFACE_CULL_WIREFRAME false
+#define BACKFACE_CULL_WIREFRAME true
 
 const float FRUSTUM_WIDTH = 1;
 
@@ -80,7 +80,7 @@ int main(int argc, char **argv)
     face *mapFaces = NULL;
     loadMap(&mapVectorsNum, &mapFacesNum, &mapVectors, &mapFaces, MAP_FILE);
 
-    camera player = {.pos = {.x = 0, .y = 0, .z = -400}, .vel = {.x = 0, .y = 0, .z = 0}, .pitch = 0, .yaw = 0, .speed = 15, .accel = 1.2, .decel = 1.2};
+    camera player = {.pos = {.x = 0, .y = -500, .z = -400}, .vel = {.x = 0, .y = 0, .z = 0}, .pitch = 0, .yaw = 0, .speed = 15, .accel = 1.2, .decel = 1.2};
 
     bool quit = false;
     SDL_Event e;
@@ -183,6 +183,8 @@ int main(int argc, char **argv)
         vec3 dv = {.x = (((wasd & 8) >> 3) - ((wasd & 2) >> 1)), .y = ((wasd & 1) - ((wasd & 4) >> 2)), .z = 0};
         dv = mul(unit(dv),player.accel);
 
+        player.vel.z = (((arrows & 4) >> 2) - (arrows & 1)) * player.speed;
+
         //player.yaw -= (((arrows & 8) >> 3) - ((arrows & 2) >> 1)) * 0.02;
         //player.pitch = clamp(player.pitch + (((arrows & 4) >> 2) - (arrows & 1)) * 0.02,-M_PI/2, M_PI/2);
 
@@ -275,7 +277,7 @@ void loadMap(int *nVectors, int *nFaces, vec3 **vectors, face **faces, char *fil
 
 void drawWireframeFace(face f, camera player, vec3 *points, SDL_Renderer *render)
 {
-    if(sub(f.norm,player.pos).y >= 0 || !BACKFACE_CULL_WIREFRAME) //only draw if the face is facing towards the player, if backface culling is enabled
+    if(!BACKFACE_CULL_WIREFRAME || dot(sub(player.pos, points[f.p1]), f.norm) >= 0) //if backface culling is enabled, only draw if the face is facing towards the player
     {
         vec3 p1R = rotateX(rotateZ(sub(points[f.p1], player.pos), -player.yaw), -player.pitch); //rotate and translate points relative to player
         vec3 p2R = rotateX(rotateZ(sub(points[f.p2], player.pos), -player.yaw), -player.pitch);
@@ -359,10 +361,10 @@ void drawLine(vec3 p1, vec3 p2, SDL_Renderer *render)
                 end = add(start, mul(disp, dot(mul(start,-1),left)/dot(disp,left)));
 
             //3d projection transformation
-            start.z *= (HEIGHT/2) / start.y;
+            start.z *= (WIDTH/2) / start.y;
             start.x *= (WIDTH/2)  / start.y;
 
-            end.z *= (HEIGHT/2) / end.y;
+            end.z *= (WIDTH/2) / end.y;
             end.x *= (WIDTH/2)  / end.y;
 
             //printf("%f %f   %f %f", start.x, start.z, end.x, end.z);
