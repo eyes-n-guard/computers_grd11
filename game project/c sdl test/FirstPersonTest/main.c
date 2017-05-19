@@ -4,9 +4,13 @@
 #include <SDL.h>
 #include <math.h>
 
-#define WIDTH 1200
+#define WIDTH 1600
 #define HEIGHT 900
 #define SENSITIVITY 2
+
+#define MAP_FILE "complexRoom.txt"
+
+#define BACKFACE_CULL_WIREFRAME false
 
 const float FRUSTUM_WIDTH = 1;
 
@@ -30,7 +34,7 @@ typedef struct //camera
 
 typedef struct //face //each face is a triangle, with 3 indexes in the vertex array
 {
-    int p1, p2, p3, texture, type; //type: 0: normal face, 1: areaportal
+    int p1, p2, p3, texture, type;//type: 0: normal face, 1: areaportal
     vec3 norm;
 } face;
 
@@ -53,6 +57,7 @@ void intersection(float x1, float y1, float x2, float y2, float x3, float y3, fl
 
 void drawLine(vec3 p1, vec3 p2, SDL_Renderer *render);
 void drawWireframeFace(face f, camera player, vec3 *points, SDL_Renderer *render);
+void loadMap(int *nVectors, int *nFaces, vec3 **vectors, face **faces, char *fileName);
 
 int main(int argc, char **argv)
 {
@@ -68,13 +73,14 @@ int main(int argc, char **argv)
     SDL_CaptureMouse(true);
     SDL_SetRelativeMouseMode(true);
 
+    //set up map
+    int mapVectorsNum = 0;
+    int mapFacesNum = 0;
+    vec3 *mapVectors = NULL;
+    face *mapFaces = NULL;
+    loadMap(&mapVectorsNum, &mapFacesNum, &mapVectors, &mapFaces, MAP_FILE);
 
-    camera player = {.pos = {.x = 0, .y = -800, .z = 0}, .vel = {.x = 0, .y = 0, .z = 0}, .pitch = 0, .yaw = 0, .speed = 15, .accel = 1.2, .decel = 1.2};
-
-    vec3 topLeft = {-600,1500,-400};
-    vec3 topRight = {600,1500,-400};
-    vec3 botLeft = {-600,500,400};
-    vec3 botRight = {600,500,400};
+    camera player = {.pos = {.x = 0, .y = 0, .z = -400}, .vel = {.x = 0, .y = 0, .z = 0}, .pitch = 0, .yaw = 0, .speed = 15, .accel = 1.2, .decel = 1.2};
 
     bool quit = false;
     SDL_Event e;
@@ -216,53 +222,10 @@ int main(int argc, char **argv)
         SDL_SetRenderDrawColor(renderer, 255,255,255, SDL_ALPHA_OPAQUE);
         SDL_RenderClear(renderer);
 
-        //stationary world, moveable player
-        /*
-        vec3 dirLine = {0,10,0};
-        dirLine = rotateZ(dirLine, player.yaw);
         SDL_SetRenderDrawColor(renderer, 0,200,200, SDL_ALPHA_OPAQUE);
-        SDL_RenderDrawLine(renderer, player.pos.x, player.pos.y, player.pos.x + dirLine.x, player.pos.y + dirLine.y);
-
-        SDL_SetRenderDrawColor(renderer, 0,0,0, SDL_ALPHA_OPAQUE);
-        SDL_RenderDrawPoint(renderer, player.pos.x, player.pos.y);
-        */
-
-        //stationary player, moveable world
-        /*
-        vec3 dirLine = {0,10,0};
-        SDL_SetRenderDrawColor(renderer, 0,200,200, SDL_ALPHA_OPAQUE);
-        SDL_RenderDrawLine(renderer, 400, 300, dirLine.x + 400, dirLine.y + 300); //shift everything right 400 and down 300 to center player
-        SDL_RenderDrawLine(renderer, 400, 300, M_SQRT1_2*100 + 400, M_SQRT1_2*100 + 300);
-        SDL_RenderDrawLine(renderer, 400, 300, -M_SQRT1_2*100 + 400, M_SQRT1_2*100 + 300);
-
-        SDL_SetRenderDrawColor(renderer, 0,0,0, SDL_ALPHA_OPAQUE);
-        SDL_RenderDrawPoint(renderer, 400, 300);
-
-        vec3 topLeftR = rotateZ(sub(topLeft,player.pos), -player.yaw);
-        vec3 topRightR = rotateZ(sub(topRight,player.pos), -player.yaw);
-        vec3 botLeftR = rotateZ(sub(botLeft,player.pos), -player.yaw);
-        vec3 botRightR = rotateZ(sub(botRight,player.pos), -player.yaw);
-
-        SDL_SetRenderDrawColor(renderer, 200,0,200,SDL_ALPHA_OPAQUE);
-        SDL_RenderDrawLine(renderer,topLeftR.x + 400, topLeftR.y + 300, topRightR.x + 400, topRightR.y + 300);
-        SDL_RenderDrawLine(renderer,botLeftR.x + 400, botLeftR.y + 300, botRightR.x + 400, botRightR.y + 300); //skipping vertical lines because they wont be seen
-        */
-
-
-
-        //transform world so player is at pos (0,0,0), and rotate world according to players angles
-        vec3 topLeftR = rotateX(rotateZ(sub(topLeft,player.pos), -player.yaw),-player.pitch);
-        vec3 topRightR = rotateX(rotateZ(sub(topRight,player.pos), -player.yaw),-player.pitch);
-        vec3 botLeftR = rotateX(rotateZ(sub(botLeft,player.pos), -player.yaw),-player.pitch);
-        vec3 botRightR = rotateX(rotateZ(sub(botRight,player.pos), -player.yaw),-player.pitch);
-
-        SDL_SetRenderDrawColor(renderer, 0,200,200, SDL_ALPHA_OPAQUE);
-        drawLine(botRightR, botLeftR, renderer);
-        drawLine(topLeftR, topRightR, renderer);
-        drawLine(botLeftR, topLeftR, renderer);
-        drawLine(botRightR, topRightR, renderer);
-        drawLine(botLeftR, topRightR, renderer);
-        drawLine(topLeftR, botRightR, renderer);
+        int faceIndex;
+        for(faceIndex=0;faceIndex < mapFacesNum;faceIndex++)
+            drawWireframeFace(mapFaces[faceIndex], player, mapVectors, renderer);
 
         SDL_RenderPresent(renderer);
         SDL_Delay(16);
@@ -273,19 +236,49 @@ int main(int argc, char **argv)
     if (window)
         SDL_DestroyWindow(window);
 
+
+    free(mapVectors);
+    free(mapFaces);
     SDL_DestroyWindow(window);
     SDL_Quit();
 
     return 0;
 }
 
+/*
+map file format:
+num_of_vertices,num_of_faces
+vec0.x,vec0.y,vec0.z
+vec1.x,vec1.y,vec1.z
+vec2.x,vec2.y,vec2.z
+...
+face0.p1,face0.p2,face0.p3,face0.texture,face0.norm.x,face0.norm.y,face0.norm.z,face0.type
+face1.p1,face1.p2,face1.p3,face1.texture,face1.norm.x,face1.norm.y,face1.norm.z,face1.type
+...
+*/
+
+void loadMap(int *nVectors, int *nFaces, vec3 **vectors, face **faces, char *fileName)
+{
+    FILE *mapFile = fopen(fileName, "r");
+    fscanf(mapFile,"%d,%d\n",nVectors,nFaces);
+    *vectors = (vec3 *)malloc(*nVectors * sizeof(vec3));
+    *faces = (face *)malloc(*nFaces * sizeof(face));
+
+    int i;
+    for(i=0;i < *nVectors;i++)
+        fscanf(mapFile,"%f,%f,%f\n",&(*vectors)[i].x, &(*vectors)[i].y, &(*vectors)[i].z);
+    for(i=0;i < *nFaces;i++)
+        fscanf(mapFile,"%d,%d,%d,%d,%f,%f,%f,%d\n", &(*faces)[i].p1, &(*faces)[i].p2, &(*faces)[i].p3, &(*faces)[i].texture, &(*faces)[i].norm.x, &(*faces)[i].norm.y, &(*faces)[i].norm.z, &(*faces)[i].type);
+    fclose(mapFile);
+}
+
 void drawWireframeFace(face f, camera player, vec3 *points, SDL_Renderer *render)
 {
-    if(rotateX(rotateZ(f.norm, -player.yaw), -player.pitch).y <= 0) //only draw if the face is facing towards the player
+    if(sub(f.norm,player.pos).y >= 0 || !BACKFACE_CULL_WIREFRAME) //only draw if the face is facing towards the player, if backface culling is enabled
     {
-        vec3 p1R = rotateX(rotateZ(points[f.p1], -player.yaw), -player.pitch); //rotate points relative to player
-        vec3 p2R = rotateX(rotateZ(points[f.p2], -player.yaw), -player.pitch);
-        vec3 p3R = rotateX(rotateZ(points[f.p3], -player.yaw), -player.pitch);
+        vec3 p1R = rotateX(rotateZ(sub(points[f.p1], player.pos), -player.yaw), -player.pitch); //rotate and translate points relative to player
+        vec3 p2R = rotateX(rotateZ(sub(points[f.p2], player.pos), -player.yaw), -player.pitch);
+        vec3 p3R = rotateX(rotateZ(sub(points[f.p3], player.pos), -player.yaw), -player.pitch);
 
         drawLine(p1R,p2R,render);
         drawLine(p2R,p3R,render);
