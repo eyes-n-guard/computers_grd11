@@ -210,7 +210,8 @@ int main(int argc, char **argv)
         player.vel = rotateZ(player.vel, player.yaw);
 
         if(length(player.vel) > player.speed) //limit speed
-            player.vel = mul(unit(player.vel), player.speed);
+            player.vel = mul(unit(player.vel),max(length(player.vel) - player.decel, player.speed));
+            //player.vel = mul(unit(player.vel), player.speed);
         player.vel.z = zHold;
 
         player.pos = add(player.pos, player.vel); //move player based on velocity
@@ -356,7 +357,6 @@ void drawLine(vec3 p1, vec3 p2, SDL_Renderer *render)
                 end = add(start, mul(disp, dot(mul(start,-1),right)/dot(disp,right)));
             if((code2 & 8) == 8) //end should be clipped to left plane
                 end = add(start, mul(disp, dot(mul(start,-1),left)/dot(disp,left)));
-            printf("\n");
 
             //3d projection transformation
             start.z *= (HEIGHT/2) / start.y;
