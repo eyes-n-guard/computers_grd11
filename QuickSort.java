@@ -6,7 +6,7 @@ public class QuickSort
 
     public QuickSort()
     {
-    	array = new int[10000];
+    	array = new int[100];
     	
     	for(int i = 0;i < array.length;i++)
     		array[i] = (int)(Math.random()*101 + 1);
