@@ -13,13 +13,14 @@
 #define CROSSHAIR_G 255
 #define CROSSHAIR_B 50
 
-#define MAP_FILE "simpleWall.txt"
+#define MAP_FILE "pillarRoom.txt"
 
 #define BACKFACE_CULL_WIREFRAME true
 #define BACKFACE_CULL_FILL true
+#define GENERATE_FACE_NORMALS true
 
 #define FRUSTUM_WIDTH 1 // = 1/tan(fov/2)
-#define FRUSTUM_NEAR_LENGTH 1
+#define FRUSTUM_NEAR_LENGTH 0.001
 
 
 
@@ -88,8 +89,10 @@ void drawFilledFaces(face *faces, int nFaces, camera player, vec3 *points, SDL_R
 void drawLine(vec3 p1, vec3 p2, SDL_Renderer *render);
 void drawWireframeFace(face f, camera player, vec3 *points, SDL_Renderer *render);
 void loadMap(int *nVectors, int *nFaces, int *nColours, vec3 **vectors, face **faces, colour **colours, char *fileName, camera *player);
-void transformFace(face f, vec3 *points, int *nPoints, vec2 **pointsOut, camera player);
+void transformFace(face f, vec3 *points, camera player, SDL_Renderer *renderer);
 void drawWireframePolygon(vec2 *polygon, int nPoints, SDL_Renderer *renderer);
+void fillTriangle(vec2 p1, vec2 p2, vec2 p3, SDL_Renderer *renderer);
+void swapVec2Ptr(vec2 **p1, vec2 **p2);
 
 int main(int argc, char **argv)
 {
@@ -323,6 +326,11 @@ face1.p1,face1.p2,face1.p3,face1.texture,face1.norm.x,face1.norm.y,face1.norm.z,
 ...
 */
 
+/*
+since calculating the surface normals for every face can be tedious, it is calculated by taking the cross product of the vectors p0-p1 and p0-p2
+the type is used to determine whether the face normal points towards the origin or away (0 towards, 1 away)
+*/
+
 void loadMap(int *nVectors, int *nFaces, int *nColors, vec3 **vectors, face **faces, colour **colours, char *fileName, camera *player)
 {
     FILE *mapFile = fopen(fileName, "r");
@@ -339,6 +347,12 @@ void loadMap(int *nVectors, int *nFaces, int *nColors, vec3 **vectors, face **fa
     {
         fscanf(mapFile,"%d,%d,%d,%d,%f,%f,%f,%d\n", &(*faces)[i].p1, &(*faces)[i].p2, &(*faces)[i].p3, &(*faces)[i].texture, &(*faces)[i].norm.x, &(*faces)[i].norm.y, &(*faces)[i].norm.z, &(*faces)[i].type);
         (*faces)[i].mid = mul(add((*vectors)[(*faces)[i].p1],add((*vectors)[(*faces)[i].p2],(*vectors)[(*faces)[i].p3])), 1.0/3.0);
+        if(GENERATE_FACE_NORMALS)
+        {
+            (*faces)[i].norm = unit(cross(sub((*vectors)[(*faces)[i].p2], (*vectors)[(*faces)[i].p1]), sub((*vectors)[(*faces)[i].p3], (*vectors)[(*faces)[i].p1])));
+            (*faces)[i].norm = mul((*faces)[i].norm, dot((*faces)[i].norm,(*faces)[i].mid) * ((*faces)[i].type * 2 - 1));
+        }
+
     }
     for(i=0;i < *nColors;i++)
         fscanf(mapFile,"%d,%d,%d\n", &(*colours)[i].r, &(*colours)[i].g, &(*colours)[i].b);
@@ -367,11 +381,7 @@ void drawFilledFaces(face *faces, int nFaces, camera player, vec3 *points, SDL_R
         for(i=nVisible-1;i >= 0;i--)
         {
             SDL_SetRenderDrawColor(renderer, colours[faces[facesIndex[i]].texture].r, colours[faces[facesIndex[i]].texture].g, colours[faces[facesIndex[i]].texture].b, SDL_ALPHA_OPAQUE);
-            vec2 *poly;
-            int polyPoints;
-            transformFace(faces[facesIndex[i]], points, &polyPoints, &poly, player);
-            drawWireframePolygon(poly, polyPoints, renderer);
-            free(poly);
+            transformFace(faces[facesIndex[i]], points, player, renderer);
         }
 
     }
@@ -406,7 +416,7 @@ void quicksort(int list[], float ref[], int l, int r)
 
 }
 
-void transformFace(face f, vec3 *points, int *nPoints, vec2 **pointsOut, camera player) //nPoints is the number of points in the new polygon (pass in address)
+void transformFace(face f, vec3 *points, camera player, SDL_Renderer *renderer) //also fills face
 {
     vec3 pointsR[3] = {rotateX(rotateZ(sub(points[f.p1], player.pos), -player.yaw), -player.pitch), //rotate and translate points relative to player
     rotateX(rotateZ(sub(points[f.p2], player.pos), -player.yaw), -player.pitch),
@@ -414,15 +424,98 @@ void transformFace(face f, vec3 *points, int *nPoints, vec2 **pointsOut, camera 
     vec3 forward = {0,1,0};
 
     int i;
-    *nPoints = 0;
-    *pointsOut = malloc(sizeof(vec2) * 4);
+    int nPoints = 0;
+    vec2 pointsOut[4];
     for(i=0;i < 3;i++)
     {
         if(pointsR[i].y >= FRUSTUM_NEAR_LENGTH)
-            (*pointsOut)[(*nPoints)++] = perspective2d(pointsR[i]);
+            pointsOut[nPoints++] = perspective2d(pointsR[i]);
         if((pointsR[i].y >= FRUSTUM_NEAR_LENGTH) != (pointsR[(i+1)%3].y >= FRUSTUM_NEAR_LENGTH))
-            (*pointsOut)[(*nPoints)++] = perspective2d(add(pointsR[i], mul(sub(pointsR[(i+1)%3],pointsR[i]), dot(sub(mul(forward,FRUSTUM_NEAR_LENGTH),pointsR[i]),forward)/dot(sub(pointsR[(i+1)%3],pointsR[i]),forward))));
+            pointsOut[nPoints++] = perspective2d(add(pointsR[i], mul(sub(pointsR[(i+1)%3],pointsR[i]), dot(sub(mul(forward,FRUSTUM_NEAR_LENGTH),pointsR[i]),forward)/dot(sub(pointsR[(i+1)%3],pointsR[i]),forward))));
     }
+
+    drawWireframePolygon(pointsOut, nPoints, renderer);
+    fillTriangle(pointsOut[0], pointsOut[1], pointsOut[2], renderer);
+    if(nPoints == 4)
+        fillTriangle(pointsOut[0], pointsOut[2], pointsOut[3], renderer);
+}
+
+void swapVec2Ptr(vec2 **p1, vec2 **p2)
+{
+    vec2 *hold = *p1;
+    *p1 = *p2;
+    *p2 = hold;
+}
+
+void fillTriangle(vec2 p1, vec2 p2, vec2 p3, SDL_Renderer *renderer)
+{
+    vec2 *top = &p1;
+    vec2 *mid = &p2;
+    vec2 *bot = &p3;
+
+    p1.x += (float)WIDTH/2; //shift to screen coords (width/2, height/2 is the origin instead of 0,0)
+    p2.x += (float)WIDTH/2;
+    p3.x += (float)WIDTH/2;
+
+    p1.y += (float)HEIGHT/2;
+    p2.y += (float)HEIGHT/2;
+    p3.y += (float)HEIGHT/2;
+
+    //sort by y value
+
+    if(top->y > bot->y)
+        swapVec2Ptr(&top,&bot);
+    if(top->y > mid->y)
+        swapVec2Ptr(&top,&mid);
+    if(mid->y > bot->y)
+        swapVec2Ptr(&mid,&bot);
+
+    vec2 mid2 = {.x = (bot->x - top->x) * (mid->y - top->y) / (bot->y - top->y) + top->x, .y = mid->y};
+
+    if(mid->y != top->y) //draw flat bottom triangle
+    {
+        float starty = max(top->y, 0); //top
+        float endy = min(mid->y, HEIGHT); //bottom
+
+        float slope1 = (mid->x - top->x) / (mid->y - top->y);
+        float slope2 = (mid2.x - top->x) / (mid2.y - top->y);
+
+        float x1 = top->x + (slope1 * (starty - top->y));
+        float x2 = top->x + (slope2 * (starty - top->y));;
+
+        float y;
+        for(y = starty;y <= endy;y++)
+        {
+            SDL_RenderDrawLine(renderer, clamp(x1,0,WIDTH), y, clamp(x2,0,WIDTH), y);
+            x1 += slope1;
+            x2 += slope2;
+        }
+    }
+
+    if(mid->y != bot->y) //draw flat top triangle
+    {
+        float starty = max(mid->y, 0);
+        float endy = min(bot->y, HEIGHT);
+
+        float slope1 = (bot->x - mid->x) / (bot->y - mid->y);
+        float slope2 = (bot->x - mid2.x) / (bot->y - mid2.y);
+
+        float x1 = mid->x + (slope1 * (starty - mid->y));
+        float x2 = mid2.x + (slope2 * (starty - mid->y));
+
+        float y;
+        for(y = starty;y <= endy;y++)
+        {
+            SDL_RenderDrawLine(renderer, clamp(x1,0,WIDTH), y, clamp(x2,0,WIDTH), y);
+            x1 += slope1;
+            x2 += slope2;
+        }
+    }
+
+    SDL_RenderDrawLine(renderer, mid->x, mid->y, mid2.x, mid2.y);
+    //SDL_RenderDrawLine(renderer, top->x, top->y, mid->x, mid->y);
+    //SDL_RenderDrawLine(renderer, top->x, top->y, bot->x, bot->y);
+    //SDL_RenderDrawLine(renderer, bot->x, bot->y, mid->x, mid->y);
 }
 
 void drawWireframePolygon(vec2 *polygon, int nPoints, SDL_Renderer *renderer)
@@ -440,7 +533,7 @@ void drawWireframePolygon(vec2 *polygon, int nPoints, SDL_Renderer *renderer)
 frustum clipping rules:
 
 each face is a triangle in 3d, and must be clipped to the view frustum
-to generate clipped points, work with one point at a time
+to generate clip + (slope1 * (starty - top->y));ped points, work with one point at a time
 p2 is the point being used, p1 and p3 are the other 2 points
 the maximum amount of points after clipping is 7, where all points are outside, all lines intersect the view frustum, and one corner is part of the resulting polygon
 
