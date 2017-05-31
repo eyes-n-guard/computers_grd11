@@ -1,10 +1,11 @@
 # depslib dependency file v1.0
-1496112765 source:c:\users\area 51\documents\computers_grd11\game project\c sdl test\firstpersontest\main.c
+1496198368 source:c:\users\area 51\documents\computers_grd11\game project\c sdl test\firstpersontest\main.c
 	<stdio.h>
 	<stdlib.h>
 	<stdbool.h>
 	<SDL.h>
 	<math.h>
+	<time.h>
 
 1476935894 c:\mingw_dev_lib\include\sdl2\sdl.h
 	"SDL_main.h"

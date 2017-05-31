@@ -3,24 +3,27 @@
 #include <stdbool.h>
 #include <SDL.h>
 #include <math.h>
+#include <time.h>
 
-#define WIDTH 1600 //640
-#define HEIGHT 900 //360
-#define SENSITIVITY 1.1
+static int WIDTH = 1920; //640
+static int HEIGHT = 1080; //360
+static float SENSITIVITY = 2.5;
 
 #define CROSSHAIR_SIZE 10 //distance from edge of crosshair to center
 #define CROSSHAIR_R 10
 #define CROSSHAIR_G 255
 #define CROSSHAIR_B 50
 
-#define MAP_FILE "pillarRoom.txt"
+#define SETTINGS_FILE "settings.txt"
+static char MAP_FILE[30];
 
 #define BACKFACE_CULL_WIREFRAME true
 #define BACKFACE_CULL_FILL true
 #define GENERATE_FACE_NORMALS true
 
-#define FRUSTUM_WIDTH 1 // = 1/tan(fov/2)
-#define FRUSTUM_NEAR_LENGTH 0.001
+static float FRUSTUM_WIDTH = 1.0; // = 1/tan(fov/2)
+static float FRUSTUM_NEAR_LENGTH = 0.01;
+static int DRAW_EDGES = false;
 
 
 
@@ -84,6 +87,7 @@ vec2 perspective2d(vec3 a);
 
 bool intersection(vec2 a1, vec2 a2, vec2 b1, vec2 b2, vec2 *result);
 
+void loadConstants(int *w, int *h, float *sens, char *map, float *frustumW, float *frustumN, int *edges, char* fileName);
 void quicksort(int list[], float ref[], int l, int r);
 void drawFilledFaces(face *faces, int nFaces, camera player, vec3 *points, SDL_Renderer *render, colour *colours);
 void drawLine(vec3 p1, vec3 p2, SDL_Renderer *render);
@@ -102,6 +106,8 @@ int main(int argc, char **argv)
     if(SDL_Init(SDL_INIT_VIDEO) != 0)
         return 1;
 
+    loadConstants(&WIDTH, &HEIGHT, &SENSITIVITY, MAP_FILE, &FRUSTUM_WIDTH, &FRUSTUM_NEAR_LENGTH, &DRAW_EDGES, SETTINGS_FILE);
+
     window = SDL_CreateWindow("Dank meme", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, SDL_WINDOW_SHOWN);
     renderer = SDL_CreateRenderer(window,-1,SDL_RENDERER_ACCELERATED);
 
@@ -118,6 +124,7 @@ int main(int argc, char **argv)
     colour *mapColours = NULL;
     loadMap(&mapVectorsNum, &mapFacesNum, &mapColoursNum, &mapVectors, &mapFaces, &mapColours, MAP_FILE, &player);
 
+    int lastTime;
 
     bool quit = false;
     SDL_Event e;
@@ -125,6 +132,7 @@ int main(int argc, char **argv)
     int wasd = 0; //w: 1, a: 2, s: 4, d: 8, space: 16
     while(!quit)
     {
+        lastTime = SDL_GetTicks();
         while(SDL_PollEvent(&e))
         {
             if(e.type == SDL_QUIT)
@@ -243,7 +251,7 @@ int main(int argc, char **argv)
         }
 
         if(player.pos.z == -400 && ((wasd & 16) == 16)) //if jump is pressed and at z == 0 then jump
-            player.vel.z = -30;
+            player.vel.z = -20;
 
 
 
@@ -282,7 +290,7 @@ int main(int argc, char **argv)
 
         //printf("x: %0.2f y: %0.2f z: %0.2f  speed: %0.2f\n", player.pos.x, player.pos.y, player.pos.z, length(player.vel));
 
-        SDL_SetRenderDrawColor(renderer, 255,255,255, SDL_ALPHA_OPAQUE);
+        SDL_SetRenderDrawColor(renderer, 128,128,128, SDL_ALPHA_OPAQUE);
         SDL_RenderClear(renderer);
 
         //SDL_SetRenderDrawColor(renderer, 0,0,0, SDL_ALPHA_OPAQUE);
@@ -295,7 +303,9 @@ int main(int argc, char **argv)
         SDL_RenderDrawLine(renderer, WIDTH/2, HEIGHT/2 + CROSSHAIR_SIZE, WIDTH/2, HEIGHT/2 - CROSSHAIR_SIZE);
 
         SDL_RenderPresent(renderer);
-        SDL_Delay(16);
+
+        SDL_Delay(max(0,16 - SDL_GetTicks() + lastTime)); //make sure the time interval is always the same
+        printf("FPS: %d\n", (int)(1000.0f/(float)(SDL_GetTicks() - lastTime))); //print fps
     }
     if (renderer)
         SDL_DestroyRenderer(renderer);
@@ -359,6 +369,19 @@ void loadMap(int *nVectors, int *nFaces, int *nColors, vec3 **vectors, face **fa
     fclose(mapFile);
 }
 
+void loadConstants(int *w, int *h, float *sens, char *map, float *frustumW, float *frustumN, int *edges, char *fileName)
+{
+    FILE *settingsFile = fopen(fileName, "r");
+    fscanf(settingsFile, "map = %[^\n]\n", map);
+    fscanf(settingsFile, "width = %d\n", w);
+    fscanf(settingsFile, "height = %d\n", h);
+    fscanf(settingsFile, "sensitivity = %f\n", sens);
+    fscanf(settingsFile, "frustum width = %f\n", frustumW);
+    fscanf(settingsFile, "frustum near length = %f\n", frustumN);
+    fscanf(settingsFile, "draw edges = %d", edges);
+    fclose(settingsFile);
+}
+
 void drawFilledFaces(face *faces, int nFaces, camera player, vec3 *points, SDL_Renderer *renderer, colour *colours)
 {
     int facesIndex[nFaces]; //index of each visible face
@@ -372,9 +395,15 @@ void drawFilledFaces(face *faces, int nFaces, camera player, vec3 *points, SDL_R
 
     if(nVisible > 0)
     {
-        float dist[nFaces];//sort facesIndex based on y value of center point after translation and rotation relative to player
+        float dist[nFaces];//sort facesIndex based on median depth value of each corner of the triangle after translation and rotation relative to player
         for(i=0;i < nVisible;i++)
-            dist[facesIndex[i]] = length(rotateX(rotateZ(sub(faces[facesIndex[i]].mid, player.pos), -player.yaw), -player.pitch));
+        {
+            float L1 = length(rotateX(rotateZ(sub(points[faces[facesIndex[i]].p1], player.pos), -player.yaw), -player.pitch));
+            float L2 = length(rotateX(rotateZ(sub(points[faces[facesIndex[i]].p2], player.pos), -player.yaw), -player.pitch));
+            float L3 = length(rotateX(rotateZ(sub(points[faces[facesIndex[i]].p3], player.pos), -player.yaw), -player.pitch));
+            dist[facesIndex[i]] = (L1 + L2 + L3);//min((L1 + L2 + L3 - min(min(L1, L2), L3) - max(max(L1, L2), L3)), (L1 + L2 + L3)/3.0);
+        }
+
         quicksort(facesIndex, dist, 0, nVisible-1);
 
         //fill in order from furthest to closest (painter's algorithm) or front to back with some spicy clipping (reverse painter's algorithm)
@@ -434,10 +463,41 @@ void transformFace(face f, vec3 *points, camera player, SDL_Renderer *renderer) 
             pointsOut[nPoints++] = perspective2d(add(pointsR[i], mul(sub(pointsR[(i+1)%3],pointsR[i]), dot(sub(mul(forward,FRUSTUM_NEAR_LENGTH),pointsR[i]),forward)/dot(sub(pointsR[(i+1)%3],pointsR[i]),forward))));
     }
 
-    drawWireframePolygon(pointsOut, nPoints, renderer);
-    fillTriangle(pointsOut[0], pointsOut[1], pointsOut[2], renderer);
-    if(nPoints == 4)
-        fillTriangle(pointsOut[0], pointsOut[2], pointsOut[3], renderer);
+    int codes[nPoints];
+    for(i=0;i < nPoints;i++)
+    {
+        codes[i] = 0;
+        if(pointsOut[i].y < -HEIGHT/2)
+            codes[i] |= 1;
+        else if(pointsOut[i].y > HEIGHT/2)
+            codes[i] |= 2;
+        if(pointsOut[i].x > WIDTH/2)
+            codes[i] |= 4;
+        if(pointsOut[i].x < -WIDTH/2)
+            codes[i] |= 8;
+    }
+
+    int visible = codes[0];
+    for(i=1;i < nPoints;i++)
+        visible &= codes[i];
+
+
+    if(visible == 0)
+    {
+        fillTriangle(pointsOut[0], pointsOut[1], pointsOut[2], renderer);
+        if(nPoints == 4)
+        {
+            fillTriangle(pointsOut[0], pointsOut[2], pointsOut[3], renderer);
+            SDL_RenderDrawLine(renderer, pointsOut[0].x + (float)WIDTH/2, pointsOut[0].y + (float)HEIGHT/2, pointsOut[2].x + (float)WIDTH/2, pointsOut[2].y + (float)HEIGHT/2);
+        }
+    }
+
+    if(DRAW_EDGES == 1)
+    {
+        SDL_SetRenderDrawColor(renderer, 0,0,0,SDL_ALPHA_OPAQUE);
+        drawWireframePolygon(pointsOut, nPoints, renderer);
+    }
+
 }
 
 void swapVec2Ptr(vec2 **p1, vec2 **p2)
@@ -481,12 +541,13 @@ void fillTriangle(vec2 p1, vec2 p2, vec2 p3, SDL_Renderer *renderer)
         float slope2 = (mid2.x - top->x) / (mid2.y - top->y);
 
         float x1 = top->x + (slope1 * (starty - top->y));
-        float x2 = top->x + (slope2 * (starty - top->y));;
+        float x2 = top->x + (slope2 * (starty - top->y));
 
         float y;
         for(y = starty;y <= endy;y++)
         {
-            SDL_RenderDrawLine(renderer, clamp(x1,0,WIDTH), y, clamp(x2,0,WIDTH), y);
+            if((x1 >= 0 || x2 >= 0) && (x1 <= WIDTH || x2 <= WIDTH))
+                SDL_RenderDrawLine(renderer, clamp(min(x1,x2),0,WIDTH) - 1, y + 0.5f, clamp(max(x1,x2),0,WIDTH) + 1, y + 0.5f);
             x1 += slope1;
             x2 += slope2;
         }
@@ -506,16 +567,17 @@ void fillTriangle(vec2 p1, vec2 p2, vec2 p3, SDL_Renderer *renderer)
         float y;
         for(y = starty;y <= endy;y++)
         {
-            SDL_RenderDrawLine(renderer, clamp(x1,0,WIDTH), y, clamp(x2,0,WIDTH), y);
+            if((x1 >= 0 || x2 >= 0) && (x1 <= WIDTH || x2 <= WIDTH))
+                SDL_RenderDrawLine(renderer, clamp(min(x1,x2),0,WIDTH), y + 0.5f, clamp(max(x1,x2),0,WIDTH) + 1, y + 0.5f);
             x1 += slope1;
             x2 += slope2;
         }
     }
 
-    SDL_RenderDrawLine(renderer, mid->x, mid->y, mid2.x, mid2.y);
-    //SDL_RenderDrawLine(renderer, top->x, top->y, mid->x, mid->y);
-    //SDL_RenderDrawLine(renderer, top->x, top->y, bot->x, bot->y);
-    //SDL_RenderDrawLine(renderer, bot->x, bot->y, mid->x, mid->y);
+    //SDL_RenderDrawLine(renderer, mid->x, mid->y, mid2.x, mid2.y);
+    SDL_RenderDrawLine(renderer, top->x , top->y + 0.5f, mid->x, mid->y + 0.5f);
+    SDL_RenderDrawLine(renderer, top->x, top->y + 0.5f, bot->x, bot->y + 0.5f);
+    SDL_RenderDrawLine(renderer, bot->x, bot->y + 0.5f, mid->x, mid->y + 0.5f);
 }
 
 void drawWireframePolygon(vec2 *polygon, int nPoints, SDL_Renderer *renderer)
