@@ -97,6 +97,8 @@ void transformFace(face f, vec3 *points, camera player, SDL_Renderer *renderer);
 void drawWireframePolygon(vec2 *polygon, int nPoints, SDL_Renderer *renderer);
 void fillTriangle(vec2 p1, vec2 p2, vec2 p3, SDL_Renderer *renderer);
 void swapVec2Ptr(vec2 **p1, vec2 **p2);
+int getClipCode(vec2 a);
+void drawClippedLine(vec2 a, vec2 b, SDL_Renderer *renderer);
 
 int main(int argc, char **argv)
 {
@@ -109,7 +111,7 @@ int main(int argc, char **argv)
     loadConstants(&WIDTH, &HEIGHT, &SENSITIVITY, MAP_FILE, &FRUSTUM_WIDTH, &FRUSTUM_NEAR_LENGTH, &DRAW_EDGES, SETTINGS_FILE);
 
     window = SDL_CreateWindow("Dank meme", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WIDTH, HEIGHT, SDL_WINDOW_SHOWN);
-    renderer = SDL_CreateRenderer(window,-1,SDL_RENDERER_ACCELERATED);
+    renderer = SDL_CreateRenderer(window,-1, SDL_RENDERER_SOFTWARE);
 
     SDL_CaptureMouse(true);
     SDL_SetRelativeMouseMode(true);
@@ -125,6 +127,9 @@ int main(int argc, char **argv)
     loadMap(&mapVectorsNum, &mapFacesNum, &mapColoursNum, &mapVectors, &mapFaces, &mapColours, MAP_FILE, &player);
 
     int lastTime;
+    SDL_RendererInfo info;
+    SDL_GetRendererInfo(renderer, &info);
+    printf("%s\n", info.name);
 
     bool quit = false;
     SDL_Event e;
@@ -231,6 +236,8 @@ int main(int argc, char **argv)
             }
         }
 
+        //FRUSTUM_WIDTH += (float)((arrows & 1) - ((arrows & 4) >> 2)) * 0.01;
+
         if(player.yaw > 2*M_PI) //keep yaw within the bounds of 0 and 2*pi
             player.yaw -= 2*M_PI;
         else if(player.yaw < 0)
@@ -253,11 +260,10 @@ int main(int argc, char **argv)
         if(player.pos.z == -400 && ((wasd & 16) == 16)) //if jump is pressed and at z == 0 then jump
             player.vel.z = -20;
 
-
-
-
         float zHold = player.vel.z; //zero z value of velocity vector so movement is only applied to x and y axes
         player.vel.z = 0;
+
+        //FRUSTUM_WIDTH = clamp(length(player.vel) * 2 / player.speed, 0.01, 2);
 
         player.vel = rotateZ(player.vel, -player.yaw);
         if(dv.x == 0)//decelerate player based on released keys and camera yaw
@@ -293,9 +299,7 @@ int main(int argc, char **argv)
         SDL_SetRenderDrawColor(renderer, 128,128,128, SDL_ALPHA_OPAQUE);
         SDL_RenderClear(renderer);
 
-        //SDL_SetRenderDrawColor(renderer, 0,0,0, SDL_ALPHA_OPAQUE);
         drawFilledFaces(mapFaces, mapFacesNum, player, mapVectors, renderer, mapColours);
-
 
         //draw crosshair
         SDL_SetRenderDrawColor(renderer, CROSSHAIR_R, CROSSHAIR_G, CROSSHAIR_B, SDL_ALPHA_OPAQUE);
@@ -307,12 +311,12 @@ int main(int argc, char **argv)
         SDL_Delay(max(0,16 - SDL_GetTicks() + lastTime)); //make sure the time interval is always the same
         printf("FPS: %d\n", (int)(1000.0f/(float)(SDL_GetTicks() - lastTime))); //print fps
     }
-    if (renderer)
+
+    if(renderer)
         SDL_DestroyRenderer(renderer);
 
-    if (window)
+    if(window)
         SDL_DestroyWindow(window);
-
 
     free(mapVectors);
     free(mapFaces);
@@ -337,7 +341,7 @@ face1.p1,face1.p2,face1.p3,face1.texture,face1.norm.x,face1.norm.y,face1.norm.z,
 */
 
 /*
-since calculating the surface normals for every face can be tedious, it is calculated by taking the cross product of the vectors p0-p1 and p0-p2
+since calculating the surface normals for every face manually can be tedious, it is calculated by taking the cross product of the vectors p0-p1 and p0-p2
 the type is used to determine whether the face normal points towards the origin or away (0 towards, 1 away)
 */
 
@@ -467,18 +471,18 @@ void transformFace(face f, vec3 *points, camera player, SDL_Renderer *renderer) 
     for(i=0;i < nPoints;i++)
     {
         codes[i] = 0;
-        if(pointsOut[i].y < -HEIGHT/2)
+        if(pointsOut[i].y < 0)
             codes[i] |= 1;
-        else if(pointsOut[i].y > HEIGHT/2)
+        else if(pointsOut[i].y > HEIGHT)
             codes[i] |= 2;
-        if(pointsOut[i].x > WIDTH/2)
+        if(pointsOut[i].x > WIDTH)
             codes[i] |= 4;
-        if(pointsOut[i].x < -WIDTH/2)
+        if(pointsOut[i].x < 0)
             codes[i] |= 8;
     }
 
     int visible = codes[0];
-    for(i=1;i < nPoints;i++)
+    for(i=1;i < nPoints;i++) //check if any segment of the polygon is in the view frustum
         visible &= codes[i];
 
 
@@ -488,15 +492,20 @@ void transformFace(face f, vec3 *points, camera player, SDL_Renderer *renderer) 
         if(nPoints == 4)
         {
             fillTriangle(pointsOut[0], pointsOut[2], pointsOut[3], renderer);
-            SDL_RenderDrawLine(renderer, pointsOut[0].x + (float)WIDTH/2, pointsOut[0].y + (float)HEIGHT/2, pointsOut[2].x + (float)WIDTH/2, pointsOut[2].y + (float)HEIGHT/2);
+            if(DRAW_EDGES == 2)
+                SDL_SetRenderDrawColor(renderer, 50,50,50,SDL_ALPHA_OPAQUE);
+            drawClippedLine(pointsOut[0], pointsOut[2], renderer);
+            //SDL_RenderDrawLine(renderer, pointsOut[0].x + (float)WIDTH/2, pointsOut[0].y + (float)HEIGHT/2, pointsOut[2].x + (float)WIDTH/2, pointsOut[2].y + (float)HEIGHT/2);
+        }
+
+        if(DRAW_EDGES)
+        {
+            SDL_SetRenderDrawColor(renderer, 0,0,0,SDL_ALPHA_OPAQUE);
+            drawWireframePolygon(pointsOut, nPoints, renderer);
         }
     }
 
-    if(DRAW_EDGES == 1)
-    {
-        SDL_SetRenderDrawColor(renderer, 0,0,0,SDL_ALPHA_OPAQUE);
-        drawWireframePolygon(pointsOut, nPoints, renderer);
-    }
+
 
 }
 
@@ -513,6 +522,7 @@ void fillTriangle(vec2 p1, vec2 p2, vec2 p3, SDL_Renderer *renderer)
     vec2 *mid = &p2;
     vec2 *bot = &p3;
 
+    /* //moved to the perspective2d function
     p1.x += (float)WIDTH/2; //shift to screen coords (width/2, height/2 is the origin instead of 0,0)
     p2.x += (float)WIDTH/2;
     p3.x += (float)WIDTH/2;
@@ -520,6 +530,7 @@ void fillTriangle(vec2 p1, vec2 p2, vec2 p3, SDL_Renderer *renderer)
     p1.y += (float)HEIGHT/2;
     p2.y += (float)HEIGHT/2;
     p3.y += (float)HEIGHT/2;
+    */
 
     //sort by y value
 
@@ -575,23 +586,99 @@ void fillTriangle(vec2 p1, vec2 p2, vec2 p3, SDL_Renderer *renderer)
     }
 
     //SDL_RenderDrawLine(renderer, mid->x, mid->y, mid2.x, mid2.y);
-    SDL_RenderDrawLine(renderer, top->x , top->y + 0.5f, mid->x, mid->y + 0.5f);
-    SDL_RenderDrawLine(renderer, top->x, top->y + 0.5f, bot->x, bot->y + 0.5f);
-    SDL_RenderDrawLine(renderer, bot->x, bot->y + 0.5f, mid->x, mid->y + 0.5f);
+    //SDL_RenderDrawLine(renderer, top->x , top->y + 0.5f, mid->x, mid->y + 0.5f);
+    //SDL_RenderDrawLine(renderer, top->x, top->y + 0.5f, bot->x, bot->y + 0.5f);
+    //SDL_RenderDrawLine(renderer, bot->x, bot->y + 0.5f, mid->x, mid->y + 0.5f);
+    drawClippedLine(p1, p2, renderer);
+    drawClippedLine(p1, p3, renderer);
+    drawClippedLine(p3, p2, renderer);
 }
 
 void drawWireframePolygon(vec2 *polygon, int nPoints, SDL_Renderer *renderer)
 {
     int i;
     for(i=0;i < nPoints;i++)
-        SDL_RenderDrawLine(renderer, polygon[i].x + WIDTH/2, polygon[i].y + HEIGHT/2, polygon[(i+1)%nPoints].x + WIDTH/2, polygon[(i+1)%nPoints].y + HEIGHT/2);
+        drawClippedLine(polygon[i], polygon[(i+1)%nPoints], renderer);
+        //SDL_RenderDrawLine(renderer, polygon[i].x + WIDTH/2, polygon[i].y + HEIGHT/2, polygon[(i+1)%nPoints].x + WIDTH/2, polygon[(i+1)%nPoints].y + HEIGHT/2);
 }
 
+int getClipCode(vec2 a) //up 1, down 2, right 4, left 8
+{
+    int out = 0;
+    if(a.y < 0)
+        out |= 1;
+    else if(a.y > HEIGHT)
+        out |= 2;
+    if(a.x > WIDTH)
+        out |= 4;
+    else if(a.x < 0)
+        out |= 8;
+    return out;
+}
+
+void drawClippedLine(vec2 a, vec2 b, SDL_Renderer *renderer) //up 1, down 2, right 4, left 8
+{
+    bool found = false, valid = false;
+    int codeA = getClipCode(a);
+    int codeB = getClipCode(b);
+
+    while(!found)
+    {
+        if(!(codeA | codeB))
+            found = valid = true;
+        else if((codeA & codeB))
+            found = true;
+        else
+        {
+            float x, y;
+            int code = (codeA ? codeA : codeB);
+
+            if(code & 1)
+            {
+                x = a.x + (b.x - a.x) * -a.y / (b.y - a.y);
+                y = 0;
+            }
+            else if(code & 2)
+            {
+                x = a.x + (b.x - a.x) * (HEIGHT - a.y) / (b.y - a.y);
+                y = HEIGHT;
+            }
+            else if(code & 4)
+            {
+                y = a.y + (b.y - a.y) * (WIDTH - a.x) / (b.x - a.x);
+                x = WIDTH;
+            }
+            else if(code & 8)
+            {
+                y = a.y + (b.y - a.y) * -a.x / (b.x - a.x);
+                x = 0;
+            }
+
+            if(code == codeA)
+            {
+                a.x = x;
+                a.y = y;
+                codeA = getClipCode(a);
+            }
+            else
+            {
+                b.x = x;
+                b.y = y;
+                codeB = getClipCode(b);
+            }
+        }
+    }
+
+    if(valid)
+        SDL_RenderDrawLine(renderer, a.x, a.y + 0.5f, b.x, b.y + 0.5f);
+
+}
 
 
 //useless stuff
 
 /*
+
 frustum clipping rules:
 
 each face is a triangle in 3d, and must be clipped to the view frustum
@@ -988,7 +1075,7 @@ vec3 toVec3(vec2 a, float z)
 
 vec2 perspective2d(vec3 a)
 {
-    vec2 r = {.x = a.x * FRUSTUM_WIDTH * (WIDTH/2) / a.y, .y = a.z * FRUSTUM_WIDTH * (WIDTH/2) / a.y};
+    vec2 r = {.x = a.x * FRUSTUM_WIDTH * ((float)WIDTH/2.0) / a.y + (float)WIDTH/2.0, .y = a.z * FRUSTUM_WIDTH * ((float)WIDTH/2.0) / a.y + (float)HEIGHT/2.0};
     return r;
 }
 
